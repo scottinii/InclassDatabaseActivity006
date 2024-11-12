@@ -8,8 +8,9 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server); // Set up Socket.IO
 
-// Serve static files from the public directory
-app.use(express.static('public'));
+// Middleware to parse JSON requests
+app.use(express.json());  // Add this line to handle JSON body parsing
+app.use(express.static('public')); // Serve static files from the public directory
 
 // MongoDB connection
 mongoose.connect('mongodb://localhost:27017/artGallery', { useNewUrlParser: true, useUnifiedTopology: true });
@@ -24,33 +25,27 @@ app.get('/api/paintings', async (req, res) => {
     }
 });
 
-// Socket.IO connection
-io.on('connection', (socket) => {
-    console.log('A user connected: ' + socket.id);
+// Add this route to handle the PUT request
+app.put('/api/paintings/update', async (req, res) => {
+    const { PaintingID, Title, FirstName, LastName, Description } = req.body;
 
-    // Handle painting update request from the client
-    socket.on('update painting', async (updatedPainting) => {
-        try {
-            // Logic to update the painting in the database
-            const { paintingID, ...updateData } = updatedPainting; // Assuming updatedPainting contains a PaintingID field
-            await Painting.findOneAndUpdate({ PaintingID: paintingID }, updateData);
-            
-            // Optionally, you can emit an event back to the client confirming the update
-            socket.emit('painting updated', { message: 'Painting updated successfully' });
-            
-            // Emit the updated list of paintings to all clients
-            const paintings = await Painting.find({});
-            io.emit('update paintings list', paintings); // Notify all clients of the updated paintings
-        } catch (err) {
-            console.error('Error updating painting:', err);
-            socket.emit('error', { message: 'Error updating painting' });
+    try {
+        // Update painting in the database
+        const updatedPainting = await Painting.findOneAndUpdate(
+            { PaintingID: PaintingID },
+            { Title, FirstName, LastName, Description },
+            { new: true } // Returns the updated painting
+        );
+
+        if (!updatedPainting) {
+            return res.status(404).send('Painting not found');
         }
-    });
 
-    // Handle user disconnection
-    socket.on('disconnect', () => {
-        console.log('User disconnected: ' + socket.id);
-    });
+        res.status(200).json(updatedPainting); // Send the updated painting as the response
+    } catch (err) {
+        console.error('Error updating painting:', err);
+        res.status(500).send('Error updating painting');
+    }
 });
 
 // Start the server

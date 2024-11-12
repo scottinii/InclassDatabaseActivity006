@@ -5,31 +5,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     const artistInput = document.getElementById('artist');
     const descriptionInput = document.getElementById('description');
 
-    let currentPaintingID = null; // Store the ID of the selected painting
+    let currentPaintingID = null;
+    let originalPaintingData = {}; // To store initial values for reset
 
-    // Fetch paintings from the API
-    try {
-        const response = await fetch('http://localhost:3000/api/paintings');
-        const paintings = await response.json();
+    // Fetch paintings from the API and display with images
+    async function fetchAndDisplayPaintings() {
+        try {
+            const response = await fetch('http://localhost:3000/api/paintings');
+            const paintings = await response.json();
 
-        // Display paintings
-        paintings.forEach(painting => {
-            const paintingItem = document.createElement('div');
-            paintingItem.className = 'painting-item';
-            paintingItem.innerText = painting.Title;
-            paintingItem.onclick = () => showPaintingDetails(painting);
-            paintingsDiv.appendChild(paintingItem);
-        });
-    } catch (error) {
-        console.error('Error fetching paintings:', error);
+            // Clear previous paintings list
+            paintingsDiv.innerHTML = ''; 
+            
+            // Display paintings with images
+            paintings.forEach(painting => {
+                const paintingItem = document.createElement('div');
+                paintingItem.className = 'painting-item';
+
+                // Try to add image for each painting
+                const paintingImage = document.createElement('img');
+                paintingImage.className = 'painting-image';
+                try {
+                    paintingImage.src = 'images/${painting.PaintingID}.jpg'; // Assuming image files are named by PaintingID
+                } catch (imageError) {
+                    paintingImage.src = 'images/default.jpg'; // Fallback to a default image
+                }
+
+                // Add title text and image to the item
+                const paintingTitle = document.createElement('div');
+                paintingTitle.className = 'painting-title';
+                paintingTitle.innerText = painting.Title;
+                
+                paintingItem.appendChild(paintingImage);
+                paintingItem.appendChild(paintingTitle);
+                paintingItem.onclick = () => showPaintingDetails(painting);
+                paintingsDiv.appendChild(paintingItem);
+            });
+        } catch (error) {
+            console.error('Error fetching paintings:', error);
+        }
     }
+
+    // Initial fetch and display of paintings
+    await fetchAndDisplayPaintings();
 
     // Show painting details in the form
     function showPaintingDetails(painting) {
-        currentPaintingID = painting.PaintingID; // Set the current painting ID
-        titleInput.value = painting.Title;
-        artistInput.value = painting.FirstName ? painting.FirstName + ' ' + painting.LastName : painting.LastName;
-        descriptionInput.value = painting.Description;
+        currentPaintingID = painting.PaintingID;
+
+        // Store the current values for resetting
+        originalPaintingData = {
+            Title: painting.Title,
+            FirstName: painting.FirstName,
+            LastName: painting.LastName,
+            Description: painting.Description,
+        };
+
+        // Set form fields to the current painting values
+        titleInput.value = originalPaintingData.Title;
+        artistInput.value = `${originalPaintingData.FirstName || ''} ${originalPaintingData.LastName || ''}`.trim();
+        descriptionInput.value = originalPaintingData.Description;
+        
         paintingForm.style.display = 'block';
     }
 
@@ -41,10 +77,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const updatedPainting = {
-            PaintingID: currentPaintingID, // Use the stored painting ID
+            PaintingID: currentPaintingID,
             Title: titleInput.value,
-            FirstName: artistInput.value.split(' ')[0] || null, // Split to get FirstName
-            LastName: artistInput.value.split(' ').slice(1).join(' '), // Remaining as LastName
+            FirstName: artistInput.value.split(' ')[0] || null,
+            LastName: artistInput.value.split(' ').slice(1).join(' '),
             Description: descriptionInput.value,
         };
 
@@ -58,39 +94,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 body: JSON.stringify(updatedPainting),
             });
             alert('Painting updated successfully!');
-            paintingForm.reset(); // Optionally reset the form
-            currentPaintingID = null; // Reset the current painting ID
+
+            // Update originalPaintingData to reflect new saved state
+            originalPaintingData = { ...updatedPainting };
 
             // Refresh the painting list
-            paintingsDiv.innerHTML = ''; // Clear the list
-            await fetchAndDisplayPaintings(); // Refetch and display the updated list
+            await fetchAndDisplayPaintings();
         } catch (error) {
             console.error('Error updating painting:', error);
             alert('Failed to update painting. Please try again.');
         }
     };
 
-    // Fetch and display paintings (used for refreshing)
-    async function fetchAndDisplayPaintings() {
-        try {
-            const response = await fetch('http://localhost:3000/api/paintings');
-            const paintings = await response.json();
-            paintings.forEach(painting => {
-                const paintingItem = document.createElement('div');
-                paintingItem.className = 'painting-item';
-                paintingItem.innerText = painting.Title;
-                paintingItem.onclick = () => showPaintingDetails(painting);
-                paintingsDiv.appendChild(paintingItem);
-            });
-        } catch (error) {
-            console.error('Error fetching paintings:', error);
-        }
-    }
-
-    // Reset button functionality
+    // Reset button functionality to revert to original values
     document.getElementById('reset-button').onclick = () => {
-        paintingForm.reset();
-        paintingForm.style.display = 'none'; // Hide form when reset
-        currentPaintingID = null; // Clear the selected painting ID
+        if (currentPaintingID) {
+            titleInput.value = originalPaintingData.Title;
+            artistInput.value = `${originalPaintingData.FirstName || ''} ${originalPaintingData.LastName || ''}`.trim();
+            descriptionInput.value = originalPaintingData.Description;
+        } else {
+            paintingForm.reset();
+        }
     };
 });
